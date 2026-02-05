@@ -23,7 +23,7 @@ A Python-based video editing pipeline that automates post-production for dance v
 
 ```bash
 # Clone and setup
-git clone <repo-url>
+git clone https://github.com/julesjewels-ai/danceshorts-fx-automator.git
 cd danceshorts-fx-automator
 make install
 
