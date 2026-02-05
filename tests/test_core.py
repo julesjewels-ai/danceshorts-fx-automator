@@ -9,12 +9,11 @@ def mock_data_files(tmp_path):
     instr_file = tmp_path / "veo_instructions.json"
     opts_file = tmp_path / "metadata_options.json"
 
-    instr_data = {"scenes": [{"id": 1, "source": "test.mp4"}]}
+    instr_data = {"scenes": [{"id": 1, "source": "test.mp4", "speed": 1.0}]}
     opts_data = {
-        "options": {
-            "1": {"style": "Basic"},
-            "2": {"style": "Recommended", "color": "Red"}
-        }
+        "option_1": {"title": "Option 1 Title", "text_overlay": ["Text 1"]},
+        "option_2": {"title": "Option 2 Recommended", "text_overlay": ["Text 2"]},
+        "recommended": 2
     }
 
     with open(instr_file, 'w') as f:
@@ -31,14 +30,14 @@ def test_initialization(mock_data_files):
     assert app.instruction_file == instr
     assert app.options_file == opts
 
-def test_load_configurations_selects_option_2(mock_data_files):
-    """Test that Option 2 (Recommended) is selected by default."""
+def test_load_configurations_selects_recommended(mock_data_files):
+    """Test that the recommended option is selected by default."""
     instr, opts = mock_data_files
     app = DanceShortsAutomator(instr, opts)
     app.load_configurations()
     
-    assert app.selected_style['style'] == "Recommended"
-    assert app.selected_style['color'] == "Red"
+    assert app.selected_style['title'] == "Option 2 Recommended"
+    assert app.selected_style['text_overlay'] == ["Text 2"]
 
 def test_missing_files_raises_error():
     """Test error handling for missing files."""
@@ -56,4 +55,4 @@ def test_dry_run_pipeline(mock_data_files, caplog):
         app.process_pipeline(dry_run=True)
     
     assert "[DRY-RUN]" in caplog.text
-    assert "Recommended" in caplog.text
+    assert "Option 2 Recommended" in caplog.text
