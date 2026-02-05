@@ -18,13 +18,10 @@ def create_dummy_inputs_if_missing():
         with open('veo_instructions.json', 'w') as f:
             json.dump({
                 "scenes": [
-                    {"id": 1, "source": "clip1.mp4", "start": 0, "duration": 5},
-                    {"id": 2, "source": "clip2.mp4", "start": 0, "duration": 5}
-                ],
-                "overlays": [
-                    {"text": "Feel the beat", "start": 1.0, "duration": 2.0},
-                    {"text": "Dance!", "start": 4.0, "duration": 1.5},
-                    {"text": "Amazing!", "start": 7.0, "duration": 2.0}
+                    {"order": 1, "clip_path": "clip1.mp4"},
+                    {"order": 2, "clip_path": "clip2.mp4"},
+                    {"order": 3, "clip_path": "clip3.mp4"},
+                    {"order": 4, "clip_path": "clip4.mp4"}
                 ]
             }, f, indent=2)
         logging.info("Created dummy veo_instructions.json")
@@ -32,11 +29,31 @@ def create_dummy_inputs_if_missing():
     if not os.path.exists('metadata_options.json'):
         with open('metadata_options.json', 'w') as f:
             json.dump({
-                "options": {
-                    "1": {"style": "Minimal", "font": "Arial"},
-                    "2": {"style": "Recommended", "font": "Impact", "color": "yellow"},
-                    "3": {"style": "Cinematic", "font": "Serif"}
-                }
+                "recommended": 2,
+                "options": [
+                    {
+                        "id": 1,
+                        "style": "Minimal",
+                        "font": "Arial",
+                        "title": "Minimal Dance",
+                        "tags": ["minimal", "dance"],
+                        "overlays": ["Simple", "Clean"]
+                    },
+                    {
+                        "id": 2,
+                        "style": "Recommended",
+                        "font": "Times-New-Roman",
+                        "color": "Gold",
+                        "title": "Elegant Dance",
+                        "tags": ["dance", "elegant", "shorts"],
+                        "overlays": [
+                            "Elegancia en cada paso",
+                            "Bajo el cielo de Andalucia",
+                            "Ritmo y pasion",
+                            "El arte de vivir"
+                        ]
+                    }
+                ]
             }, f, indent=2)
         logging.info("Created dummy metadata_options.json")
 

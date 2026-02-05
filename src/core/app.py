@@ -53,35 +53,65 @@ class DanceShortsAutomator:
         """
         Selects the 'Recommended' style (Option 2) by default.
         """
-        # Defaulting to Option 2 per requirements
-        options_data = self.options.get('options', {})
-        if '2' in options_data:
-            self.selected_style = options_data['2']
-            logger.info(f"Selected Style: {self.selected_style.get('style', 'Unknown')} (Option 2)")
+        recommended_id = self.options.get('recommended')
+        options_data = self.options.get('options', [])
+
+        selected = None
+
+        # Handle list of options (new requirement)
+        if isinstance(options_data, list):
+            for opt in options_data:
+                if opt.get('id') == recommended_id:
+                    selected = opt
+                    break
+        # Handle dict of options (legacy/fallback)
+        elif isinstance(options_data, dict):
+            if str(recommended_id) in options_data:
+                selected = options_data[str(recommended_id)]
+
+        if selected:
+            self.selected_style = selected
+            logger.info(f"Selected Style: {self.selected_style.get('style', 'Unknown')} (Option {recommended_id})")
         else:
-            logger.warning("Option 2 not found in metadata. Falling back to first available option.")
-            self.selected_style = next(iter(options_data.values())) if options_data else {}
+            logger.warning("Recommended option not found. Falling back to first available option.")
+            if options_data:
+                if isinstance(options_data, list):
+                    self.selected_style = options_data[0]
+                else:
+                    self.selected_style = next(iter(options_data.values()))
+            else:
+                self.selected_style = {}
 
     def _stitch_scenes(self) -> VideoFileClip:
         """
         Stitches scenes together with cross-dissolve transitions.
         """
         scenes_data = self.instructions.get('scenes', [])
+
+        # Sort by 'order' if available, otherwise 'id', otherwise keep order
+        scenes_data = sorted(scenes_data, key=lambda x: x.get('order', x.get('id', 0)))
+
         clips = []
 
         for i, scene in enumerate(scenes_data):
-            source = scene.get('source')
-            start = scene.get('start', 0)
-            duration = scene.get('duration', 5)
+            source = scene.get('clip_path') or scene.get('source')
 
-            if not os.path.exists(source):
+            if not source or not os.path.exists(source):
                 logger.warning(f"Source file {source} not found. Skipping.")
                 continue
 
-            clip = VideoFileClip(source).subclipped(start, start + duration)
+            clip = VideoFileClip(source)
 
-            # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
-            target_w, target_h = 720, 1280
+            # Use explicit start/duration if provided, otherwise use full clip
+            if 'start' in scene and 'duration' in scene:
+                start = scene.get('start', 0)
+                duration = scene.get('duration')
+                clip = clip.subclipped(start, start + duration)
+            elif 'duration' in scene:
+                clip = clip.subclipped(0, scene['duration'])
+
+            # Ensure 9:16 aspect ratio (1080x1920) via Crop-to-Fill
+            target_w, target_h = 1080, 1920
             target_ratio = target_w / target_h
             current_ratio = clip.w / clip.h
 
@@ -111,42 +141,92 @@ class DanceShortsAutomator:
 
     def _apply_overlays(self, base_clip: VideoFileClip) -> CompositeVideoClip:
         """
-        Applies beat-synced text overlays based on style options.
+        Applies text overlays based on style options and scene timing.
         """
-        overlays_data = self.instructions.get('overlays', [])
-        style = self.selected_style
+        # Use overlays from selected style (Option 2)
+        overlays_text = self.selected_style.get('overlays', [])
 
-        font = style.get('font', 'Arial')
-        color = style.get('color', 'white')
+        # Get scenes to calculate timing
+        scenes_data = self.instructions.get('scenes', [])
+        scenes_data = sorted(scenes_data, key=lambda x: x.get('order', x.get('id', 0)))
+
+        style = self.selected_style
+        # Requirement: Serif/Gold. Use Times-New-Roman or generic Serif.
+        font = style.get('font', 'Times-New-Roman')
+        color = style.get('color', 'Gold')
 
         text_clips = [base_clip]
 
-        for overlay in overlays_data:
-            text = overlay.get('text', '')
-            start = overlay.get('start', 0)
-            duration = overlay.get('duration', 2)
+        current_time = 0.0
+        padding = -0.5 # Match the padding in stitch_scenes
 
-            # Create TextClip
-            # Using method='caption' to wrap text if needed, or default
-            try:
-                txt_clip = (TextClip(text=text, font_size=70, color=color, font=font, size=(base_clip.w, None), method='caption')
-                            .with_position('center')
-                            .with_start(start)
-                            .with_duration(duration))
-                text_clips.append(txt_clip)
-            except Exception as e:
-                logger.warning(f"Failed to create TextClip for '{text}': {e}. Trying fallback font.")
-                # Fallback without font specification (uses default)
+        for i, scene in enumerate(scenes_data):
+            # Calculate duration of this scene to determine placement
+            source = scene.get('clip_path') or scene.get('source')
+            if not source or not os.path.exists(source):
+                continue
+
+            # Determine clip duration
+            clip_duration = 0
+            if 'duration' in scene and 'start' not in scene:
+                 # Explicit duration only
+                 clip_duration = scene['duration']
+            elif 'duration' in scene and 'start' in scene:
+                 # Explicit duration with start
+                 clip_duration = scene['duration']
+            else:
+                # Need to read the file to get duration
                 try:
-                    txt_clip = (TextClip(text=text, font_size=70, color=color, size=(base_clip.w, None), method='caption')
-                                .with_position('center')
-                                .with_start(start)
-                                .with_duration(duration))
+                    # Creating a temp clip just to read duration
+                    with VideoFileClip(source) as c:
+                         clip_duration = c.duration
+                except Exception as e:
+                    logger.warning(f"Could not read duration for {source}: {e}")
+                    # Default fallback
+                    clip_duration = 5.0
+
+            # Overlay Text if available for this scene
+            if i < len(overlays_text):
+                text = overlays_text[i]
+
+                # Position: Lower third (0.75 relative height)
+                # Styling: Font size 70, Gold
+                try:
+                    txt_clip = (TextClip(text=text, font_size=70, color=color, font=font, size=(base_clip.w, None), method='caption')
+                                .with_position(('center', 0.75), relative=True)
+                                .with_start(current_time + 0.5)  # Start slightly after transition
+                                .with_duration(max(1, clip_duration - 1.0))) # Ensure at least 1s duration
                     text_clips.append(txt_clip)
-                except Exception as e2:
-                    logger.error(f"Failed to create TextClip fallback: {e2}")
+                except Exception as e:
+                    logger.warning(f"Failed to create TextClip for '{text}': {e}. Trying fallback.")
+                    try:
+                        # Fallback without font
+                        txt_clip = (TextClip(text=text, font_size=70, color=color, size=(base_clip.w, None), method='caption')
+                                    .with_position(('center', 0.75), relative=True)
+                                    .with_start(current_time + 0.5)
+                                    .with_duration(max(1, clip_duration - 1.0)))
+                        text_clips.append(txt_clip)
+                    except Exception as e2:
+                        logger.error(f"Failed to create TextClip fallback: {e2}")
+
+            # Update current_time for next scene
+            current_time += clip_duration + padding
 
         return CompositeVideoClip(text_clips)
+
+    def generate_sidecar_file(self) -> None:
+        """
+        Generates a sidecar description file using Title and Tags from Option 2.
+        """
+        title = self.selected_style.get('title', 'Untitled Dance Video')
+        tags = self.selected_style.get('tags', [])
+
+        content = f"Title: {title}\n\nTags:\n" + ", ".join(tags)
+
+        output_path = "video_metadata.txt"
+        with open(output_path, 'w') as f:
+            f.write(content)
+        logger.info(f"Generated sidecar file: {output_path}")
 
     def process_pipeline(self, dry_run: bool = False) -> None:
         """
@@ -169,6 +249,9 @@ class DanceShortsAutomator:
 
             logger.info(f"Step 2: Applying Text Overlays using style: {self.selected_style}...")
             final_clip = self._apply_overlays(stitched_clip)
+
+            logger.info("Step 3: Generating Sidecar Metadata File...")
+            self.generate_sidecar_file()
 
             output_filename = "final_dance_short.mp4"
             logger.info(f"Rendering final export to {output_filename}...")
