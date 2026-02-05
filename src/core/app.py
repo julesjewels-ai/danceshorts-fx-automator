@@ -51,16 +51,22 @@ class DanceShortsAutomator:
 
     def _apply_style_logic(self) -> None:
         """
-        Selects the 'Recommended' style (Option 2) by default.
+        Selects the recommended style by default.
         """
-        # Defaulting to Option 2 per requirements
-        options_data = self.options.get('options', {})
-        if '2' in options_data:
-            self.selected_style = options_data['2']
-            logger.info(f"Selected Style: {self.selected_style.get('style', 'Unknown')} (Option 2)")
+        recommended_idx = self.options.get('recommended', 2)
+        option_key = f"option_{recommended_idx}"
+
+        if option_key in self.options:
+            self.selected_style = self.options[option_key]
+            logger.info(f"Selected Style: {self.selected_style.get('title', 'Unknown')} ({option_key})")
         else:
-            logger.warning("Option 2 not found in metadata. Falling back to first available option.")
-            self.selected_style = next(iter(options_data.values())) if options_data else {}
+            logger.warning(f"{option_key} not found in metadata. Falling back to option_2 or first available.")
+            if 'option_2' in self.options:
+                self.selected_style = self.options['option_2']
+            else:
+                # Find any key starting with 'option_'
+                options = [v for k, v in self.options.items() if k.startswith('option_')]
+                self.selected_style = options[0] if options else {}
 
     def _stitch_scenes(self) -> VideoFileClip:
         """
@@ -73,12 +79,16 @@ class DanceShortsAutomator:
             source = scene.get('source')
             start = scene.get('start', 0)
             duration = scene.get('duration', 5)
+            speed = scene.get('speed', 1.0)
 
             if not os.path.exists(source):
                 logger.warning(f"Source file {source} not found. Skipping.")
                 continue
 
             clip = VideoFileClip(source).subclipped(start, start + duration)
+
+            if speed != 1.0:
+                clip = clip.with_effects([vfx.MultiplySpeed(speed)])
 
             # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
             target_w, target_h = 720, 1280
@@ -111,23 +121,30 @@ class DanceShortsAutomator:
 
     def _apply_overlays(self, base_clip: VideoFileClip) -> CompositeVideoClip:
         """
-        Applies beat-synced text overlays based on style options.
+        Applies text overlays from the selected metadata option, distributed evenly.
         """
-        overlays_data = self.instructions.get('overlays', [])
-        style = self.selected_style
+        texts = self.selected_style.get('text_overlay', [])
+        if not texts:
+            logger.info("No text overlays found in selected style.")
+            return base_clip
 
-        font = style.get('font', 'Arial')
-        color = style.get('color', 'white')
+        # Default styling
+        font = 'Impact'
+        color = 'white'
 
         text_clips = [base_clip]
+        total_duration = base_clip.duration
+        num_texts = len(texts)
+        if num_texts == 0:
+             return base_clip
 
-        for overlay in overlays_data:
-            text = overlay.get('text', '')
-            start = overlay.get('start', 0)
-            duration = overlay.get('duration', 2)
+        segment_duration = total_duration / num_texts
+
+        for i, text in enumerate(texts):
+            start = i * segment_duration
+            duration = segment_duration
 
             # Create TextClip
-            # Using method='caption' to wrap text if needed, or default
             try:
                 txt_clip = (TextClip(text=text, font_size=70, color=color, font=font, size=(base_clip.w, None), method='caption')
                             .with_position('center')
@@ -136,7 +153,6 @@ class DanceShortsAutomator:
                 text_clips.append(txt_clip)
             except Exception as e:
                 logger.warning(f"Failed to create TextClip for '{text}': {e}. Trying fallback font.")
-                # Fallback without font specification (uses default)
                 try:
                     txt_clip = (TextClip(text=text, font_size=70, color=color, size=(base_clip.w, None), method='caption')
                                 .with_position('center')
@@ -157,7 +173,7 @@ class DanceShortsAutomator:
         """
         scenes = self.instructions.get('scenes', [])
         logger.info(f"Processing {len(scenes)} scenes for 9:16 vertical render.")
-        logger.info(f"Using style: {self.selected_style.get('style', 'Unknown')}")
+        logger.info(f"Using style: {self.selected_style.get('title', 'Unknown')}")
         
         if dry_run:
             logger.info("[DRY-RUN] Video processing simulated. No file written.")
