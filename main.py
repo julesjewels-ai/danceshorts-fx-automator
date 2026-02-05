@@ -10,36 +10,6 @@ def setup_logging():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
-def create_dummy_inputs_if_missing():
-    """Generates sample JSON files if they don't exist to make the MVP runnable immediately."""
-    import json
-    
-    if not os.path.exists('veo_instructions.json'):
-        with open('veo_instructions.json', 'w') as f:
-            json.dump({
-                "scenes": [
-                    {"id": 1, "source": "clip1.mp4", "start": 0, "duration": 5},
-                    {"id": 2, "source": "clip2.mp4", "start": 0, "duration": 5}
-                ],
-                "overlays": [
-                    {"text": "Feel the beat", "start": 1.0, "duration": 2.0},
-                    {"text": "Dance!", "start": 4.0, "duration": 1.5},
-                    {"text": "Amazing!", "start": 7.0, "duration": 2.0}
-                ]
-            }, f, indent=2)
-        logging.info("Created dummy veo_instructions.json")
-
-    if not os.path.exists('metadata_options.json'):
-        with open('metadata_options.json', 'w') as f:
-            json.dump({
-                "options": {
-                    "1": {"style": "Minimal", "font": "Arial"},
-                    "2": {"style": "Recommended", "font": "Impact", "color": "yellow"},
-                    "3": {"style": "Cinematic", "font": "Serif"}
-                }
-            }, f, indent=2)
-        logging.info("Created dummy metadata_options.json")
-
 def main():
     """Entry point for the DanceShorts FX Automator CLI."""
     parser = argparse.ArgumentParser(
@@ -47,16 +17,23 @@ def main():
     )
     parser.add_argument('--version', action='version', version='%(prog)s 1.0.0')
     parser.add_argument('--dry-run', action='store_true', help="Simulate rendering without invoking heavy video processing.")
+    parser.add_argument('--data-dir', default='data', help="Directory containing input data.")
     
     args = parser.parse_args()
     
     setup_logging()
-    create_dummy_inputs_if_missing()
+
+    data_dir = args.data_dir
+    report_file = os.path.join(data_dir, 'production_report.csv')
+    instruction_file = os.path.join(data_dir, 'veo_instructions.json')
+    options_file = os.path.join(data_dir, 'metadata_options.json')
 
     try:
         app = DanceShortsAutomator(
-            instruction_file='veo_instructions.json',
-            options_file='metadata_options.json'
+            report_file=report_file,
+            instruction_file=instruction_file,
+            options_file=options_file,
+            assets_dir=data_dir
         )
         
         app.load_configurations()
