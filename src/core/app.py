@@ -2,6 +2,8 @@ import json
 import os
 import logging
 from typing import Dict, Any, List
+from moviepy import VideoFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
+import moviepy.video.fx as vfx
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +62,92 @@ class DanceShortsAutomator:
             logger.warning("Option 2 not found in metadata. Falling back to first available option.")
             self.selected_style = next(iter(options_data.values())) if options_data else {}
 
+    def _stitch_scenes(self) -> VideoFileClip:
+        """
+        Stitches scenes together with cross-dissolve transitions.
+        """
+        scenes_data = self.instructions.get('scenes', [])
+        clips = []
+
+        for i, scene in enumerate(scenes_data):
+            source = scene.get('source')
+            start = scene.get('start', 0)
+            duration = scene.get('duration', 5)
+
+            if not os.path.exists(source):
+                logger.warning(f"Source file {source} not found. Skipping.")
+                continue
+
+            clip = VideoFileClip(source).subclipped(start, start + duration)
+
+            # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
+            target_w, target_h = 720, 1280
+            target_ratio = target_w / target_h
+            current_ratio = clip.w / clip.h
+
+            if current_ratio > target_ratio:
+                # Source is wider than target (e.g. 16:9 vs 9:16)
+                # Resize by height to match target height, then crop width
+                clip = clip.resized(height=target_h)
+                clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
+            else:
+                # Source is taller or equal (e.g. 9:16 or thinner)
+                # Resize by width to match target width, then crop height
+                clip = clip.resized(width=target_w)
+                clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
+
+            # Apply CrossFadeIn to subsequent clips for transition effect
+            if i > 0:
+                clip = clip.with_effects([vfx.CrossFadeIn(0.5)])
+
+            clips.append(clip)
+
+        if not clips:
+            raise ValueError("No valid clips found to stitch.")
+
+        # method='compose' and padding required for overlapping transitions
+        final_clip = concatenate_videoclips(clips, method="compose", padding=-0.5)
+        return final_clip
+
+    def _apply_overlays(self, base_clip: VideoFileClip) -> CompositeVideoClip:
+        """
+        Applies beat-synced text overlays based on style options.
+        """
+        overlays_data = self.instructions.get('overlays', [])
+        style = self.selected_style
+
+        font = style.get('font', 'Arial')
+        color = style.get('color', 'white')
+
+        text_clips = [base_clip]
+
+        for overlay in overlays_data:
+            text = overlay.get('text', '')
+            start = overlay.get('start', 0)
+            duration = overlay.get('duration', 2)
+
+            # Create TextClip
+            # Using method='caption' to wrap text if needed, or default
+            try:
+                txt_clip = (TextClip(text=text, font_size=70, color=color, font=font, size=(base_clip.w, None), method='caption')
+                            .with_position('center')
+                            .with_start(start)
+                            .with_duration(duration))
+                text_clips.append(txt_clip)
+            except Exception as e:
+                logger.warning(f"Failed to create TextClip for '{text}': {e}. Trying fallback font.")
+                # Fallback without font specification (uses default)
+                try:
+                    txt_clip = (TextClip(text=text, font_size=70, color=color, size=(base_clip.w, None), method='caption')
+                                .with_position('center')
+                                .with_start(start)
+                                .with_duration(duration))
+                    text_clips.append(txt_clip)
+                except Exception as e2:
+                    logger.error(f"Failed to create TextClip fallback: {e2}")
+
+        return CompositeVideoClip(text_clips)
+
     def process_pipeline(self, dry_run: bool = False) -> None:
         """
         Executes the video processing pipeline: stitching -> overlays -> rendering.
@@ -69,20 +157,32 @@ class DanceShortsAutomator:
         """
         scenes = self.instructions.get('scenes', [])
         logger.info(f"Processing {len(scenes)} scenes for 9:16 vertical render.")
-        
-        logger.info("Step 1: Stitching Scenes...")
-        # Placeholder for MoviePy concatenation logic
-        
-        logger.info(f"Step 2: Applying Text Overlays using style: {self.selected_style}...")
-        # Placeholder for MoviePy TextClip logic with beat-sync
-        
-        output_filename = "final_dance_short.mp4"
+        logger.info(f"Using style: {self.selected_style.get('style', 'Unknown')}")
         
         if dry_run:
             logger.info("[DRY-RUN] Video processing simulated. No file written.")
-        else:
-            # In a real scenario, MoviePy write_videofile would go here
-            logger.info(f"Rendering final export to {output_filename} (Simulated for MVP)...")
-            with open(output_filename, 'w') as f:
-                f.write("Simulated MP4 content")
+            return
+
+        try:
+            logger.info("Step 1: Stitching Scenes...")
+            stitched_clip = self._stitch_scenes()
+
+            logger.info(f"Step 2: Applying Text Overlays using style: {self.selected_style}...")
+            final_clip = self._apply_overlays(stitched_clip)
+
+            output_filename = "final_dance_short.mp4"
+            logger.info(f"Rendering final export to {output_filename}...")
+
+            # Write video file
+            final_clip.write_videofile(
+                output_filename,
+                fps=24,
+                codec='libx264',
+                audio_codec='aac',
+                threads=4
+            )
             logger.info("Render complete.")
+
+        except Exception as e:
+            logger.error(f"Pipeline failed: {e}")
+            raise
