@@ -20,6 +20,11 @@ def create_dummy_inputs_if_missing():
                 "scenes": [
                     {"id": 1, "source": "clip1.mp4", "start": 0, "duration": 5},
                     {"id": 2, "source": "clip2.mp4", "start": 0, "duration": 5}
+                ],
+                "overlays": [
+                    {"text": "Feel the beat", "start": 1.0, "duration": 2.0},
+                    {"text": "Dance!", "start": 4.0, "duration": 1.5},
+                    {"text": "Amazing!", "start": 7.0, "duration": 2.0}
                 ]
             }, f, indent=2)
         logging.info("Created dummy veo_instructions.json")
