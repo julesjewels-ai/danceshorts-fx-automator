@@ -15,7 +15,7 @@ class DanceShortsAutomator:
     specifically tuned for YouTube Shorts (9:16 aspect ratio).
     """
 
-    def __init__(self, instruction_file: str, options_file: str, style_file: str):
+    def __init__(self, instruction_file: str, options_file: str, style_file: str, working_directory: str = None):
         """
         Initialize the automator.
 
@@ -23,10 +23,12 @@ class DanceShortsAutomator:
             instruction_file (str): Path to veo_instructions.json
             options_file (str): Path to metadata_options.json
             style_file (str): Path to style_options.json
+            working_directory (str): Base directory for resolving relative paths (optional)
         """
         self.instruction_file = instruction_file
         self.options_file = options_file
         self.style_file = style_file
+        self.working_directory = working_directory or os.getcwd()
         self.instructions: Dict[str, Any] = {}
         self.metadata_options: Dict[str, Any] = {}
         self.style_options: Dict[str, Any] = {}
@@ -95,11 +97,12 @@ class DanceShortsAutomator:
         Validates that the custom audio source file exists if specified.
         """
         audio_source = self.instructions.get('audio_source')
-        if audio_source and not os.path.exists(audio_source):
-            raise FileNotFoundError(f"Audio source file not found: {audio_source}")
-        
         if audio_source:
-            logger.info(f"Custom audio source specified: {audio_source}")
+            # Resolve relative paths from working directory
+            audio_path = os.path.join(self.working_directory, audio_source) if not os.path.isabs(audio_source) else audio_source
+            if not os.path.exists(audio_path):
+                raise FileNotFoundError(f"Audio source file not found: {audio_path}")
+            logger.info(f"Custom audio source specified: {audio_path}")
 
     def _apply_custom_audio(self, video_clip: VideoFileClip) -> VideoFileClip:
         """
@@ -118,8 +121,10 @@ class DanceShortsAutomator:
         
         try:
             from moviepy import AudioFileClip
-            logger.info(f"Loading custom audio from: {audio_source}")
-            audio_clip = AudioFileClip(audio_source)
+            # Resolve relative paths from working directory
+            audio_path = os.path.join(self.working_directory, audio_source) if not os.path.isabs(audio_source) else audio_source
+            logger.info(f"Loading custom audio from: {audio_path}")
+            audio_clip = AudioFileClip(audio_path)
             
             # Match audio duration to video duration
             if audio_clip.duration > video_clip.duration:
@@ -152,11 +157,14 @@ class DanceShortsAutomator:
             start = scene.get('start', 0)
             duration = scene.get('duration', 5)
 
-            if not os.path.exists(source):
-                logger.warning(f"Source file {source} not found. Skipping.")
+            # Resolve relative paths from working directory
+            source_path = os.path.join(self.working_directory, source) if not os.path.isabs(source) else source
+            
+            if not os.path.exists(source_path):
+                logger.warning(f"Source file {source_path} not found. Skipping.")
                 continue
 
-            clip = VideoFileClip(source).subclipped(start, start + duration)
+            clip = VideoFileClip(source_path).subclipped(start, start + duration)
 
             # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
             target_w, target_h = 720, 1280
@@ -270,12 +278,13 @@ class DanceShortsAutomator:
 
         return CompositeVideoClip(text_clips)
 
-    def process_pipeline(self, dry_run: bool = False) -> None:
+    def process_pipeline(self, dry_run: bool = False, output_path: str = None) -> None:
         """
         Executes the video processing pipeline: stitching -> overlays -> rendering.
         
         Args:
             dry_run (bool): If True, skips actual video rendering.
+            output_path (str): Custom output path for the final video (optional)
         """
         scenes = self.instructions.get('scenes', [])
         logger.info(f"Processing {len(scenes)} scenes for 9:16 vertical render.")
@@ -296,7 +305,7 @@ class DanceShortsAutomator:
             logger.info(f"Step 3: Applying Text Overlays using style: {self.selected_style}...")
             final_clip = self._apply_overlays(stitched_clip)
 
-            output_filename = "final_dance_short.mp4"
+            output_filename = output_path or "final_dance_short.mp4"
             logger.info(f"Rendering final export to {output_filename}...")
 
             # Write video file
@@ -307,7 +316,7 @@ class DanceShortsAutomator:
                 audio_codec='aac',
                 threads=4
             )
-            logger.info("Render complete.")
+            logger.info(f"✓ Render complete: {output_filename}")
 
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")

@@ -1,0 +1,11 @@
+{
+    "options": {
+        "1": {
+            "style": "Test Style 2",
+            "font": "Arial",
+            "color": "yellow",
+            "font_size": 65
+        }
+    },
+    "default": "1"
+}
