@@ -61,10 +61,34 @@ Edit `veo_instructions.json` to define how your video will be stitched together:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `audio_source` | string (optional) | Path to custom audio file to use for entire video |
 | `id` | integer | Unique identifier for the scene (determines order) |
 | `source` | string | Path to the video file (relative or absolute) |
 | `start` | float | Start time in seconds within the source clip |
 | `duration` | float | How many seconds to include from the clip |
+
+**Custom Audio:**
+
+To use your own audio file for the entire final video (instead of using audio from individual clips), add the `audio_source` field:
+
+```json
+{
+  "audio_source": "path/to/your_music.mp3",
+  "scenes": [
+    {
+      "id": 1,
+      "source": "path/to/intro_spin.mp4",
+      "start": 0,
+      "duration": 3.5
+    },
+    ...
+  ]
+}
+```
+
+- **Supported formats**: MP3, WAV, AAC, M4A
+- **Audio length**: If longer than video, audio will be trimmed. If shorter, you'll get a warning.
+- **Optional**: If not specified, the original audio from clips will be preserved.
 
 **Tips:**
 - Scenes are processed in order by `id`

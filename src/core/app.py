@@ -60,6 +60,7 @@ class DanceShortsAutomator:
 
         self._apply_metadata_selection()
         self._apply_style_logic()
+        self._validate_audio_source()
 
     def _apply_metadata_selection(self) -> None:
         """
@@ -88,6 +89,56 @@ class DanceShortsAutomator:
         else:
             logger.warning(f"Default style {default_style} not found. Falling back to first available option.")
             self.selected_style = next(iter(options_data.values())) if options_data else {}
+
+    def _validate_audio_source(self) -> None:
+        """
+        Validates that the custom audio source file exists if specified.
+        """
+        audio_source = self.instructions.get('audio_source')
+        if audio_source and not os.path.exists(audio_source):
+            raise FileNotFoundError(f"Audio source file not found: {audio_source}")
+        
+        if audio_source:
+            logger.info(f"Custom audio source specified: {audio_source}")
+
+    def _apply_custom_audio(self, video_clip: VideoFileClip) -> VideoFileClip:
+        """
+        Replaces the video's audio with a custom audio file if specified.
+        
+        Args:
+            video_clip: The video clip to apply custom audio to
+            
+        Returns:
+            Video clip with replaced audio, or original clip if no custom audio
+        """
+        audio_source = self.instructions.get('audio_source')
+        
+        if not audio_source:
+            return video_clip
+        
+        try:
+            from moviepy import AudioFileClip
+            logger.info(f"Loading custom audio from: {audio_source}")
+            audio_clip = AudioFileClip(audio_source)
+            
+            # Match audio duration to video duration
+            if audio_clip.duration > video_clip.duration:
+                # Trim audio to match video length
+                audio_clip = audio_clip.subclipped(0, video_clip.duration)
+                logger.info(f"Audio trimmed to match video duration: {video_clip.duration:.2f}s")
+            elif audio_clip.duration < video_clip.duration:
+                # Loop audio to match video length if needed
+                logger.warning(f"Audio duration ({audio_clip.duration:.2f}s) is shorter than video ({video_clip.duration:.2f}s). Consider using a longer audio file.")
+            
+            # Replace the audio
+            video_clip = video_clip.with_audio(audio_clip)
+            logger.info("Custom audio applied successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to apply custom audio: {e}")
+            raise
+        
+        return video_clip
 
     def _stitch_scenes(self) -> VideoFileClip:
         """
@@ -191,16 +242,17 @@ class DanceShortsAutomator:
             duration = overlay.get('duration', 2)
 
             # Apply fixes for text cutoff issue:
-            # 1. Use 90% width to prevent edge rendering glitches
+            # 1. Use max width with padding to prevent edge rendering glitches
             # 2. Add newline hack to ensure descenders (g, y, p, q, j) aren't cropped
-            safe_width = int(base_clip.w * 0.9)
+            # Limiting to 70% width for better padding on sides
+            safe_width = int(base_clip.w * 0.7)
             text_with_margin = text + " \n"
 
             # Create TextClip
             # Using method='caption' to wrap text if needed, or default
             try:
                 txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, font=font, size=(safe_width, None), method='caption')
-                            .with_position('center')
+                            .with_position(('center', 600))
                             .with_start(start)
                             .with_duration(duration))
                 text_clips.append(txt_clip)
@@ -209,7 +261,7 @@ class DanceShortsAutomator:
                 # Fallback without font specification (uses default)
                 try:
                     txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, size=(safe_width, None), method='caption')
-                                .with_position('center')
+                                .with_position(('center', 600))
                                 .with_start(start)
                                 .with_duration(duration))
                     text_clips.append(txt_clip)
@@ -238,7 +290,10 @@ class DanceShortsAutomator:
             logger.info("Step 1: Stitching Scenes...")
             stitched_clip = self._stitch_scenes()
 
-            logger.info(f"Step 2: Applying Text Overlays using style: {self.selected_style}...")
+            logger.info("Step 2: Applying Custom Audio (if specified)...")
+            stitched_clip = self._apply_custom_audio(stitched_clip)
+
+            logger.info(f"Step 3: Applying Text Overlays using style: {self.selected_style}...")
             final_clip = self._apply_overlays(stitched_clip)
 
             output_filename = "final_dance_short.mp4"
@@ -257,3 +312,4 @@ class DanceShortsAutomator:
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
             raise
+
