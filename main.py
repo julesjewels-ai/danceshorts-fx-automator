@@ -20,11 +20,6 @@ def create_dummy_inputs_if_missing():
                 "scenes": [
                     {"id": 1, "source": "clip1.mp4", "start": 0, "duration": 5},
                     {"id": 2, "source": "clip2.mp4", "start": 0, "duration": 5}
-                ],
-                "overlays": [
-                    {"text": "Feel the beat", "start": 1.0, "duration": 2.0},
-                    {"text": "Dance!", "start": 4.0, "duration": 1.5},
-                    {"text": "Amazing!", "start": 7.0, "duration": 2.0}
                 ]
             }, f, indent=2)
         logging.info("Created dummy veo_instructions.json")
@@ -32,13 +27,47 @@ def create_dummy_inputs_if_missing():
     if not os.path.exists('metadata_options.json'):
         with open('metadata_options.json', 'w') as f:
             json.dump({
-                "options": {
-                    "1": {"style": "Minimal", "font": "Arial"},
-                    "2": {"style": "Recommended", "font": "Impact", "color": "yellow"},
-                    "3": {"style": "Cinematic", "font": "Serif"}
-                }
+                "option_1": {
+                    "title": "Demo Dance Video 💃",
+                    "description": "Sample dance video with text overlays.",
+                    "tags": ["dance", "demo", "sample"],
+                    "emotional_hook": "Energetic and fun.",
+                    "text_hook": "Feel the rhythm! 🎵",
+                    "text_overlay": [
+                        "Feel the beat",
+                        "Dance with passion",
+                        "Move your body",
+                        "Amazing!"
+                    ]
+                },
+                "option_2": {
+                    "title": "Elegant Dance ✨",
+                    "description": "Graceful movements and classic style.",
+                    "tags": ["dance", "elegant", "classy"],
+                    "emotional_hook": "Sophisticated and timeless.",
+                    "text_hook": "Pure elegance ✨",
+                    "text_overlay": [
+                        "Grace in motion",
+                        "Classic style",
+                        "Timeless beauty",
+                        "Simply stunning"
+                    ]
+                },
+                "recommended": 1
             }, f, indent=2)
         logging.info("Created dummy metadata_options.json")
+    
+    if not os.path.exists('style_options.json'):
+        with open('style_options.json', 'w') as f:
+            json.dump({
+                "options": {
+                    "1": {"style": "Minimal", "font": "Arial", "color": "white", "font_size": 70},
+                    "2": {"style": "Recommended", "font": "Impact", "color": "yellow", "font_size": 70},
+                    "3": {"style": "Cinematic", "font": "Serif", "color": "white", "font_size": 60}
+                },
+                "default": "2"
+            }, f, indent=2)
+        logging.info("Created dummy style_options.json")
 
 def main():
     """Entry point for the DanceShorts FX Automator CLI."""
@@ -56,7 +85,8 @@ def main():
     try:
         app = DanceShortsAutomator(
             instruction_file='veo_instructions.json',
-            options_file='metadata_options.json'
+            options_file='metadata_options.json',
+            style_file='style_options.json'
         )
         
         app.load_configurations()

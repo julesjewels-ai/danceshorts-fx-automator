@@ -15,19 +15,23 @@ class DanceShortsAutomator:
     specifically tuned for YouTube Shorts (9:16 aspect ratio).
     """
 
-    def __init__(self, instruction_file: str, options_file: str):
+    def __init__(self, instruction_file: str, options_file: str, style_file: str):
         """
         Initialize the automator.
 
         Args:
             instruction_file (str): Path to veo_instructions.json
             options_file (str): Path to metadata_options.json
+            style_file (str): Path to style_options.json
         """
         self.instruction_file = instruction_file
         self.options_file = options_file
+        self.style_file = style_file
         self.instructions: Dict[str, Any] = {}
-        self.options: Dict[str, Any] = {}
+        self.metadata_options: Dict[str, Any] = {}
+        self.style_options: Dict[str, Any] = {}
         self.selected_style: Dict[str, Any] = {}
+        self.selected_metadata: Dict[str, Any] = {}
 
     def load_configurations(self) -> None:
         """
@@ -38,28 +42,51 @@ class DanceShortsAutomator:
         
         if not os.path.exists(self.options_file):
             raise FileNotFoundError(f"{self.options_file} not found.")
+        
+        if not os.path.exists(self.style_file):
+            raise FileNotFoundError(f"{self.style_file} not found.")
 
         with open(self.instruction_file, 'r') as f:
             self.instructions = json.load(f)
             logger.info(f"Loaded instructions from {self.instruction_file}")
 
         with open(self.options_file, 'r') as f:
-            self.options = json.load(f)
-            logger.info(f"Loaded options from {self.options_file}")
+            self.metadata_options = json.load(f)
+            logger.info(f"Loaded metadata options from {self.options_file}")
+        
+        with open(self.style_file, 'r') as f:
+            self.style_options = json.load(f)
+            logger.info(f"Loaded style options from {self.style_file}")
 
+        self._apply_metadata_selection()
         self._apply_style_logic()
 
+    def _apply_metadata_selection(self) -> None:
+        """
+        Selects the metadata option based on the 'recommended' field.
+        """
+        recommended = self.metadata_options.get('recommended', 1)
+        option_key = f"option_{recommended}"
+        
+        if option_key in self.metadata_options:
+            self.selected_metadata = self.metadata_options[option_key]
+            logger.info(f"Selected metadata option: {recommended} - {self.selected_metadata.get('title', 'Unknown')}")
+        else:
+            logger.warning(f"Recommended option {recommended} not found. Falling back to option_1.")
+            self.selected_metadata = self.metadata_options.get('option_1', {})
+    
     def _apply_style_logic(self) -> None:
         """
-        Selects the 'Recommended' style (Option 2) by default.
+        Selects the style based on the 'default' field from style_options.json.
         """
-        # Defaulting to Option 2 per requirements
-        options_data = self.options.get('options', {})
-        if '2' in options_data:
-            self.selected_style = options_data['2']
-            logger.info(f"Selected Style: {self.selected_style.get('style', 'Unknown')} (Option 2)")
+        options_data = self.style_options.get('options', {})
+        default_style = self.style_options.get('default', '2')
+        
+        if default_style in options_data:
+            self.selected_style = options_data[default_style]
+            logger.info(f"Selected Style: {self.selected_style.get('style', 'Unknown')} (Option {default_style})")
         else:
-            logger.warning("Option 2 not found in metadata. Falling back to first available option.")
+            logger.warning(f"Default style {default_style} not found. Falling back to first available option.")
             self.selected_style = next(iter(options_data.values())) if options_data else {}
 
     def _stitch_scenes(self) -> VideoFileClip:
@@ -109,15 +136,52 @@ class DanceShortsAutomator:
         final_clip = concatenate_videoclips(clips, method="compose", padding=-0.5)
         return final_clip
 
+    def _extract_overlays_from_metadata(self, video_duration: float) -> List[Dict[str, Any]]:
+        """
+        Extracts text overlays from selected metadata and auto-distributes timing.
+        
+        Args:
+            video_duration: Total duration of the stitched video in seconds
+            
+        Returns:
+            List of overlay dictionaries with text, start, and duration
+        """
+        text_overlay_array = self.selected_metadata.get('text_overlay', [])
+        
+        if not text_overlay_array:
+            logger.warning("No text overlays found in selected metadata option.")
+            return []
+        
+        num_overlays = len(text_overlay_array)
+        overlays = []
+        
+        # Auto-distribute overlays evenly across video duration
+        # Each overlay gets equal time slice with slight padding
+        overlay_duration = min(2.5, video_duration / num_overlays)  # Max 2.5s per overlay
+        interval = video_duration / num_overlays
+        
+        for i, text in enumerate(text_overlay_array):
+            start_time = i * interval
+            overlays.append({
+                'text': text,
+                'start': start_time,
+                'duration': overlay_duration
+            })
+            logger.debug(f"Overlay {i+1}: '{text}' at {start_time:.2f}s for {overlay_duration:.2f}s")
+        
+        return overlays
+    
     def _apply_overlays(self, base_clip: VideoFileClip) -> CompositeVideoClip:
         """
-        Applies beat-synced text overlays based on style options.
+        Applies text overlays based on metadata and style options.
         """
-        overlays_data = self.instructions.get('overlays', [])
+        # Get overlays from metadata with auto-distributed timing
+        overlays_data = self._extract_overlays_from_metadata(base_clip.duration)
         style = self.selected_style
 
         font = style.get('font', 'Arial')
         color = style.get('color', 'white')
+        font_size = style.get('font_size', 70)
 
         text_clips = [base_clip]
 
@@ -126,10 +190,16 @@ class DanceShortsAutomator:
             start = overlay.get('start', 0)
             duration = overlay.get('duration', 2)
 
+            # Apply fixes for text cutoff issue:
+            # 1. Use 90% width to prevent edge rendering glitches
+            # 2. Add newline hack to ensure descenders (g, y, p, q, j) aren't cropped
+            safe_width = int(base_clip.w * 0.9)
+            text_with_margin = text + " \n"
+
             # Create TextClip
             # Using method='caption' to wrap text if needed, or default
             try:
-                txt_clip = (TextClip(text=text, font_size=70, color=color, font=font, size=(base_clip.w, None), method='caption')
+                txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, font=font, size=(safe_width, None), method='caption')
                             .with_position('center')
                             .with_start(start)
                             .with_duration(duration))
@@ -138,7 +208,7 @@ class DanceShortsAutomator:
                 logger.warning(f"Failed to create TextClip for '{text}': {e}. Trying fallback font.")
                 # Fallback without font specification (uses default)
                 try:
-                    txt_clip = (TextClip(text=text, font_size=70, color=color, size=(base_clip.w, None), method='caption')
+                    txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, size=(safe_width, None), method='caption')
                                 .with_position('center')
                                 .with_start(start)
                                 .with_duration(duration))
@@ -157,6 +227,7 @@ class DanceShortsAutomator:
         """
         scenes = self.instructions.get('scenes', [])
         logger.info(f"Processing {len(scenes)} scenes for 9:16 vertical render.")
+        logger.info(f"Using metadata option: {self.selected_metadata.get('title', 'Unknown')}")
         logger.info(f"Using style: {self.selected_style.get('style', 'Unknown')}")
         
         if dry_run:

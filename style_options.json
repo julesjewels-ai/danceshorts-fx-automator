@@ -1,0 +1,23 @@
+{
+    "options": {
+        "1": {
+            "style": "Minimal",
+            "font": "Arial",
+            "color": "white",
+            "font_size": 70
+        },
+        "2": {
+            "style": "Recommended",
+            "font": "Impact",
+            "color": "yellow",
+            "font_size": 70
+        },
+        "3": {
+            "style": "Cinematic",
+            "font": "Serif",
+            "color": "white",
+            "font_size": 60
+        }
+    },
+    "default": "2"
+}

@@ -1,0 +1,17 @@
+{
+  "options": {
+    "1": {
+      "style": "Minimal",
+      "font": "Arial"
+    },
+    "2": {
+      "style": "Recommended",
+      "font": "Impact",
+      "color": "yellow"
+    },
+    "3": {
+      "style": "Cinematic",
+      "font": "Serif"
+    }
+  }
+}

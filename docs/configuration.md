@@ -2,13 +2,20 @@
 
 ## Overview
 
-This guide provides comprehensive documentation for configuring **DanceShorts FX Automator** through its JSON configuration files.
+This guide provides comprehensive documentation for configuring **DanceShorts FX Automator** through its three JSON configuration files.
 
 ## Configuration Files
 
+The system uses three separate configuration files:
+1. **`veo_instructions.json`** - Scene sequencing and video clips
+2. **`metadata_options.json`** - Text overlay content and social media metadata
+3. **`style_options.json`** - Visual styling for text overlays
+
+---
+
 ### 1. veo_instructions.json
 
-This file defines the video editing instructions, including which clips to use and how to sequence them.
+Defines which video clips to use and how to sequence them.
 
 #### Schema
 
@@ -27,115 +34,125 @@ This file defines the video editing instructions, including which clips to use a
 
 #### Field Reference
 
-##### scenes (array, required)
-
-An array of scene objects that define the video structure.
-
-##### Scene Object Properties
-
 | Property | Type | Required | Description | Example |
 |----------|------|----------|-------------|---------|
-| `id` | integer | Yes | Unique scene identifier. Determines processing order (ascending). | `1` |
-| `source` | string | Yes | Path to source video file (relative or absolute). | `"clips/dance.mp4"` |
-| `start` | float | Yes | Start timestamp in seconds within the source file. | `2.5` |
-| `duration` | float | Yes | Duration in seconds to extract from the source. | `5.0` |
+| `id` | integer | Yes | Unique scene identifier (determines order) | `1` |
+| `source` | string | Yes | Path to source video file | `"clips/dance.mp4"` |
+| `start` | float | Yes | Start timestamp in seconds | `2.5` |
+| `duration` | float | Yes | Duration in seconds to extract | `5.0` |
 
-#### Examples
-
-**Basic Configuration:**
+#### Example
 
 ```json
 {
   "scenes": [
     {
       "id": 1,
-      "source": "intro.mp4",
+      "source": "clip1.mp4",
       "start": 0,
-      "duration": 3
-    },
-    {
-      "id": 2,
-      "source": "main.mp4",
-      "start": 1.5,
-      "duration": 8
-    }
-  ]
-}
-```
-
-**Multi-Clip Sequence:**
-
-```json
-{
-  "scenes": [
-    {
-      "id": 1,
-      "source": "clips/warmup.mp4",
-      "start": 5.2,
-      "duration": 2.8
-    },
-    {
-      "id": 2,
-      "source": "clips/performance.mp4",
-      "start": 0,
-      "duration": 12.5
-    },
-    {
-      "id": 3,
-      "source": "clips/finale.mp4",
-      "start": 3.1,
-      "duration": 4.3
-    },
-    {
-      "id": 4,
-      "source": "clips/credits.mp4",
-      "start": 0,
-      "duration": 2
-    }
-  ]
-}
-```
-
-**Reusing Source Clips:**
-
-```json
-{
-  "scenes": [
-    {
-      "id": 1,
-      "source": "master_take.mp4",
-      "start": 0,
-      "duration": 3
-    },
-    {
-      "id": 2,
-      "source": "other_angle.mp4",
-      "start": 2,
       "duration": 5
     },
     {
-      "id": 3,
-      "source": "master_take.mp4",
-      "start": 10,
-      "duration": 4
+      "id": 2,
+      "source": "clip2.mp4",
+      "start": 0,
+      "duration": 5
     }
   ]
 }
 ```
-
-#### Best Practices
-
-1. **Sequential IDs** - Number scenes sequentially (1, 2, 3...) for clarity
-2. **Precise Timing** - Use decimal values (e.g., `2.5`) for accurate cuts
-3. **Verify Sources** - Ensure all source files exist before running
-4. **Reasonable Durations** - Keep total duration under 60 seconds for Shorts
-5. **Buffer Zones** - Leave 0.5s buffer at clip boundaries to avoid artifacts
 
 ---
 
 ### 2. metadata_options.json
 
-This file defines text overlay styles and formatting options.
+**NEW SCHEMA**: Defines rich metadata including text overlays, titles, descriptions, and tags for each creative option.
+
+#### Schema
+
+```json
+{
+  "option_1": {
+    "title": "<string>",
+    "description": "<string>",
+    "tags": ["<string>", ...],
+    "emotional_hook": "<string>",
+    "text_hook": "<string>",
+    "text_overlay": ["<string>", ...]
+  },
+  "option_2": { ... },
+  "option_3": { ... },
+  "recommended": <integer>
+}
+```
+
+#### Field Reference
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `option_N` | object | Yes | Creative option (N = 1, 2, 3, etc.) |
+| `title` | string | Yes | Video title for social media |
+| `description` | string | Yes | Full description with hashtags |
+| `tags` | array | Yes | Array of searchable keywords |
+| `emotional_hook` | string | Yes | Target emotional response |
+| `text_hook` | string | Yes | Short engaging text for thumbnails |
+| `text_overlay` | array | **Yes** | Array of text strings to display in video |
+| `recommended` | integer | Yes | Which option to use (1, 2, 3, etc.) |
+
+#### Text Overlay Timing
+
+**Important**: The `text_overlay` array contains only text content. Timing is **auto-distributed** evenly across the video duration.
+
+**Example**: For a 10-second video with 4 overlays:
+- Overlay 1: 0.0s - 2.5s
+- Overlay 2: 2.5s - 5.0s  
+- Overlay 3: 5.0s - 7.5s
+- Overlay 4: 7.5s - 10.0s
+
+#### Example
+
+```json
+{
+  "option_1": {
+    "title": "Bachata: Amor del Bueno 📻❤️",
+    "description": "Viaja en el tiempo a una época donde el amor se declaraba bailando frente al mar. 🌊\n\n#Bachata 📻 #Nostalgia 🕰️ #Años60 🌅",
+    "tags": [
+      "bachata",
+      "bachata romantica",
+      "amor",
+      "nostalgia"
+    ],
+    "emotional_hook": "Nostalgia y calidez: Despierta el anhelo por un pasado romántico.",
+    "text_hook": "Como se enamoraba antes... 🕰️",
+    "text_overlay": [
+      "Aquellos domingos de playa",
+      "Cuando el tiempo se detenía",
+      "Solo tú, yo y la bachata",
+      "Amor eterno de los 60"
+    ]
+  },
+  "option_2": {
+    "title": "Elegancia en el Baile ✨💃",
+    "description": "La clase nunca pasa de moda...",
+    "tags": ["bachata dance", "elegancia"],
+    "emotional_hook": "Aspiracional: Deseo de experimentar elegancia.",
+    "text_hook": "¿Existe algo más elegante? ✨",
+    "text_overlay": [
+      "La elegancia es eterna",
+      "Cada paso cuenta una historia",
+      "Conexión pura y sutil",
+      "El arte de la bachata fina"
+    ]
+  },
+  "recommended": 1
+}
+```
+
+---
+
+### 3. style_options.json
+
+**NEW FILE**: Defines visual styling for text overlays (fonts, colors, sizes).
 
 #### Schema
 
@@ -146,141 +163,80 @@ This file defines text overlay styles and formatting options.
       "style": "<string>",
       "font": "<string>",
       "color": "<string>",
-      ... additional properties
+      "font_size": <integer>
     }
-  }
+  },
+  "default": "<option_id>"
 }
 ```
 
 #### Field Reference
 
-##### options (object, required)
-
-A dictionary of style options indexed by numeric string keys.
-
-##### Option Object Properties
-
 | Property | Type | Required | Description | Default |
 |----------|------|----------|-------------|---------|
 | `style` | string | Yes | Display name for the style | - |
 | `font` | string | Yes | Font family name | `"Arial"` |
-| `color` | string | No | Text color (name or hex) | `"white"` |
-| `size` | integer | No | Font size in pixels | `72` |
-| `position` | string | No | Overlay position | `"bottom"` |
+| `color` | string | Yes | Text color (name or hex) | `"white"` |
+| `font_size` | integer | Yes | Font size in pixels | `70` |
+| `default` | string | Yes | Which option to use by default | `"2"` |
 
-#### Examples
+#### Available Fonts
 
-**Minimal Styles:**
+The system supports standard system fonts. Common options:
+- **Impact** - Bold, attention-grabbing
+- **Arial** - Clean, minimal
+- **Serif** - Elegant, classic
+
+#### Example
 
 ```json
 {
   "options": {
     "1": {
       "style": "Minimal",
-      "font": "Arial"
+      "font": "Arial",
+      "color": "white",
+      "font_size": 70
     },
     "2": {
       "style": "Recommended",
       "font": "Impact",
-      "color": "yellow"
-    }
-  }
-}
-```
-
-**Rich Styles with Extended Properties:**
-
-```json
-{
-  "options": {
-    "1": {
-      "style": "Subtle",
-      "font": "Helvetica Neue",
-      "color": "#FFFFFF",
-      "size": 48,
-      "position": "bottom",
-      "opacity": 0.8
-    },
-    "2": {
-      "style": "Bold",
-      "font": "Impact",
-      "color": "#FFD700",
-      "size": 72,
-      "position": "center",
-      "stroke": "#000000",
-      "stroke_width": 2
+      "color": "yellow",
+      "font_size": 70
     },
     "3": {
-      "style": "Elegant",
-      "font": "Georgia",
+      "style": "Cinematic",
+      "font": "Serif",
       "color": "white",
-      "size": 56,
-      "position": "top",
-      "shadow": true
+      "font_size": 60
     }
-  }
+  },
+  "default": "2"
 }
-```
-
-**Platform-Specific Styles:**
-
-```json
-{
-  "options": {
-    "1": {
-      "style": "TikTok Style",
-      "font": "Montserrat",
-      "color": "#FE2C55",
-      "size": 64,
-      "position": "bottom"
-    },
-    "2": {
-      "style": "Instagram Reel",
-      "font": "Arial Black",
-      "color": "#E1306C",
-      "size": 68,
-      "position": "center"
-    },
-    "3": {
-      "style": "YouTube Shorts",
-      "font": "Roboto",
-      "color": "#FF0000",
-      "size": 60,
-      "position": "bottom"
-    }
-  }
-}
-```
-
-#### Style Selection Logic
-
-**Default Behavior:**
-- The system **always selects Option 2** by default
-- If Option 2 is missing, it falls back to the first available option
-
-**To Change Default:**
-
-Modify `src/core/app.py`, line 57:
-
-```python
-# Change '2' to your desired option
-if '1' in options_data:  # Changed from '2' to '1'
-    self.selected_style = options_data['1']
 ```
 
 ---
 
+## How It Works
+
+The system combines all three configuration files:
+
+```mermaid
+graph LR
+    A[veo_instructions.json] -->|Scene clips| D[Video Processing]
+    B[metadata_options.json] -->|Text content| D
+    C[style_options.json] -->|Font/color/size| D
+    D --> E[final_dance_short.mp4]
+```
+
+1. **Scenes** from `veo_instructions.json` are stitched together
+2. **Text overlays** from the recommended option in `metadata_options.json`
+3. **Styled** using the default option from `style_options.json`
+4. **Auto-distributed** timing ensures overlays appear evenly throughout the video
+
+---
+
 ## Validation
-
-### Automatic Validation
-
-The automator validates configurations on load:
-
-1. **File Existence** - Checks if JSON files exist
-2. **JSON Syntax** - Validates proper JSON formatting
-3. **Required Fields** - Ensures all mandatory fields are present
-
-### Manual Validation
 
 Test your configuration before rendering:
 
@@ -288,79 +244,47 @@ Test your configuration before rendering:
 python main.py --dry-run
 ```
 
-This runs all validation steps without rendering video.
+This validates:
+- ✅ All three JSON files exist
+- ✅ JSON syntax is correct
+- ✅ Required fields are present
+- ✅ Recommended/default options exist
 
 ---
 
-## Environment Variables
+## Migration from Old Format
 
-Currently, the automator uses hardcoded configuration file paths. For flexibility, consider setting:
+If you have an old `metadata_options.json` with style information:
 
-```bash
-export VEO_INSTRUCTIONS="path/to/custom_instructions.json"
-export METADATA_OPTIONS="path/to/custom_options.json"
-```
-
-*(Note: This requires code modification to implement)*
-
----
-
-## Configuration Templates
-
-### Template 1: Quick Dance Clip (15s)
-
-**veo_instructions.json:**
-```json
-{
-  "scenes": [
-    {
-      "id": 1,
-      "source": "dance_clip.mp4",
-      "start": 0,
-      "duration": 15
-    }
-  ]
-}
-```
-
-**metadata_options.json:**
+**Old format** (deprecated):
 ```json
 {
   "options": {
-    "2": {
-      "style": "Recommended",
-      "font": "Impact",
-      "color": "yellow"
-    }
+    "1": {"style": "Minimal", "font": "Arial"}
   }
 }
 ```
 
-### Template 2: Three-Part Story (30s)
+**New format** (create two files):
 
-**veo_instructions.json:**
+`metadata_options.json`:
 ```json
 {
-  "scenes": [
-    {
-      "id": 1,
-      "source": "setup.mp4",
-      "start": 0,
-      "duration": 8
-    },
-    {
-      "id": 2,
-      "source": "buildup.mp4",
-      "start": 2,
-      "duration": 12
-    },
-    {
-      "id": 3,
-      "source": "payoff.mp4",
-      "start": 1,
-      "duration": 10
-    }
-  ]
+  "option_1": {
+    "title": "My Video",
+    "text_overlay": ["Text 1", "Text 2"]
+  },
+  "recommended": 1
+}
+```
+
+`style_options.json`:
+```json
+{
+  "options": {
+    "1": {"style": "Minimal", "font": "Arial", "color": "white", "font_size": 70}
+  },
+  "default": "1"
 }
 ```
 
@@ -368,44 +292,21 @@ export METADATA_OPTIONS="path/to/custom_options.json"
 
 ## Troubleshooting
 
-### Common Configuration Errors
+### Common Errors
 
-**Error:** `FileNotFoundError: veo_instructions.json not found`
-- **Cause:** Missing configuration file
-- **Fix:** Ensure file exists in project root or run app once to auto-generate
+**Error:** `FileNotFoundError: style_options.json not found`
+- **Fix:** Run the app once to auto-generate, or create manually
 
-**Error:** `JSONDecodeError`
-- **Cause:** Invalid JSON syntax
-- **Fix:** Validate JSON using [JSONLint](https://jsonlint.com/)
+**Error:** `No text overlays found in selected metadata option`
+- **Fix:** Ensure the recommended option has a non-empty `text_overlay` array
 
-**Error:** `KeyError: 'scenes'`
-- **Cause:** Missing required 'scenes' array
-- **Fix:** Ensure your JSON has a top-level "scenes" array
-
-**Error:** `Source file not found`
-- **Cause:** Invalid path in scene source
-- **Fix:** Use absolute paths or verify relative paths from project root
-
----
-
-## Advanced Configuration
-
-### Future Configuration Options
-
-Planned features for future releases:
-
-- **Transition Types** - Cross-fade, cut, wipe
-- **Audio Mixing** - Background music, volume controls
-- **Text Content** - Custom overlay text per scene
-- **Filters** - Color grading, effects
-- **Export Presets** - Platform-specific optimization
-
-To request features, please [open an issue](https://github.com/julesjewels-ai/danceshorts-fx-automator/issues).
+**Error:** `Recommended option X not found`
+- **Fix:** Check that `option_X` exists (e.g., if `recommended: 2`, you need `option_2`)
 
 ---
 
 ## See Also
 
-- [User Guide](user-guide.md) - Step-by-step usage instructions
-- [Advanced Features](advanced-features.md) - Power user tips
-- [API Reference](api-reference.md) - Python API documentation
+- [User Guide](user-guide.md) - Step-by-step usage
+- [FAQ](faq.md) - Frequently asked questions
+- [API Reference](api-reference.md) - Python API docs
