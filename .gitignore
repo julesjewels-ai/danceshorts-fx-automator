@@ -19,3 +19,5 @@ ENV/
 *.mov
 veo_instructions.json
 metadata_options.json
+
+*.DS_Store
