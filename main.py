@@ -90,19 +90,22 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Discover all project folders (subdirectories with required JSON files)
+    # style_options.json is optional - will fall back to master copy if not present
     project_folders = []
     for item in input_path.iterdir():
         if item.is_dir():
             # Check if folder has required configuration files
-            required_files = ['veo_instructions.json', 'metadata_options.json', 'style_options.json']
+            # Note: style_options.json is optional, will use master fallback if missing
+            required_files = ['veo_instructions.json', 'metadata_options.json']
             if all((item / f).exists() for f in required_files):
                 project_folders.append(item)
             else:
-                logging.warning(f"Skipping {item.name}: missing required JSON files")
+                logging.warning(f"Skipping {item.name}: missing required JSON files (veo_instructions.json, metadata_options.json)")
     
     if not project_folders:
         logging.error(f"No valid project folders found in {input_dir}")
-        logging.info("Each project folder must contain: veo_instructions.json, metadata_options.json, style_options.json")
+        logging.info("Each project folder must contain: veo_instructions.json, metadata_options.json")
+        logging.info("style_options.json is optional (will use master copy from project root if not present)")
         sys.exit(1)
     
     logging.info(f"\n{'='*60}")
@@ -117,10 +120,25 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
         logging.info("-" * 60)
         
         try:
+            # Determine style file path (use local or fallback to master)
+            style_file_path = project_folder / 'style_options.json'
+            if not style_file_path.exists():
+                # Fallback to master copy in project root
+                master_style_path = input_path.parent / 'style_options.json'
+                if master_style_path.exists():
+                    style_file_path = master_style_path
+                    logging.info(f"  Using master style_options.json (no local copy found)")
+                else:
+                    logging.error(f"  No style_options.json found locally or in project root")
+                    results['failed'].append(project_name)
+                    continue
+            else:
+                logging.info(f"  Using local style_options.json")
+            
             app = DanceShortsAutomator(
                 instruction_file=str(project_folder / 'veo_instructions.json'),
                 options_file=str(project_folder / 'metadata_options.json'),
-                style_file=str(project_folder / 'style_options.json'),
+                style_file=str(style_file_path),
                 working_directory=str(project_folder)
             )
             
