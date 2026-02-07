@@ -4,6 +4,13 @@ Welcome to the **DanceShorts FX Automator** documentation! This guide will help 
 
 ## 📚 Documentation Index
 
+### 🎨 Visual Guide (Start Here!)
+
+- **[Visual Guide](visual-guide.md)** - **Perfect for non-technical users!**
+  - See what the tool does with images and diagrams
+  - Understand the workflow visually
+  - No technical jargon!
+
 ### Getting Started
 
 - **[Getting Started Guide](getting-started.md)** - Installation, prerequisites, and quick start

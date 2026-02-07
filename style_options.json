@@ -2,7 +2,7 @@
     "options": {
         "1": {
             "style": "Minimal",
-            "font": "Arial",
+            "font": "Arial-Unicode-MS",
             "color": "white",
             "font_size": 70
         },
@@ -14,10 +14,16 @@
         },
         "3": {
             "style": "Cinematic",
-            "font": "Serif",
+            "font": "Georgia",
             "color": "white",
             "font_size": 60
+        },
+        "4": {
+            "style": "Clásico",
+            "font": "Baskerville",
+            "color": "white",
+            "font_size": 62
         }
     },
-    "default": "2"
+    "default": "3"
 }
