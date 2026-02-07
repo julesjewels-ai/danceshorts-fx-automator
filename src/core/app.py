@@ -49,7 +49,18 @@ class DanceShortsAutomator:
             raise FileNotFoundError(f"{self.style_file} not found.")
 
         with open(self.instruction_file, 'r') as f:
-            self.instructions = json.load(f)
+            loaded_data = json.load(f)
+            
+            # Normalize old format (array) to new format (object with scenes key)
+            if isinstance(loaded_data, list):
+                logger.info(f"Detected legacy array format in {self.instruction_file}, normalizing...")
+                self.instructions = {
+                    "scenes": loaded_data,
+                    "audio_source": None
+                }
+            else:
+                self.instructions = loaded_data
+            
             logger.info(f"Loaded instructions from {self.instruction_file}")
 
         with open(self.options_file, 'r') as f:
@@ -152,10 +163,28 @@ class DanceShortsAutomator:
         scenes_data = self.instructions.get('scenes', [])
         clips = []
 
+
         for i, scene in enumerate(scenes_data):
             source = scene.get('source')
+            
+            # Validate that required fields exist
+            if source is None:
+                # Check if this is a Veo generation format (has start_image/end_image/prompt)
+                if 'start_image' in scene or 'end_image' in scene or 'prompt' in scene:
+                    raise ValueError(
+                        f"Scene {i+1} appears to be in Veo AI generation format (contains 'start_image'/'end_image'/'prompt'). "
+                        "This tool requires video stitching format with 'source', 'start', and 'duration' fields. "
+                        "Please convert your Veo generation instructions to actual video clips first."
+                    )
+                else:
+                    raise ValueError(
+                        f"Scene {i+1} is missing required 'source' field. "
+                        "Expected format: {{\"source\": \"clip.mp4\", \"start\": 0, \"duration\": 5}}"
+                    )
+            
             start = scene.get('start', 0)
             duration = scene.get('duration', 5)
+
 
             # Resolve relative paths from working directory
             source_path = os.path.join(self.working_directory, source) if not os.path.isabs(source) else source

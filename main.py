@@ -70,6 +70,32 @@ def create_dummy_inputs_if_missing():
             }, f, indent=2)
         logging.info("Created dummy style_options.json")
 
+def create_default_veo_instructions(project_folder: Path):
+    """
+    Creates a default veo_instructions.json file with 4 clips.
+    
+    Args:
+        project_folder: Path to the project folder where the file should be created
+    """
+    import json
+    
+    default_veo_instructions = {
+        "_comment": "Optional: Specify a custom audio file to use for the entire video",
+        "audio_source": "",
+        "scenes": [
+            {"id": 1, "source": "clip1.mp4", "start": 1, "duration": 2},
+            {"id": 2, "source": "clip2.mp4", "start": 2, "duration": 3},
+            {"id": 3, "source": "clip3.mp4", "start": 2, "duration": 5},
+            {"id": 4, "source": "clip4.mp4", "start": 2, "duration": 5}
+        ]
+    }
+    
+    veo_file_path = project_folder / 'veo_instructions.json'
+    with open(veo_file_path, 'w') as f:
+        json.dump(default_veo_instructions, f, indent=2)
+    
+    logging.info(f"  Created default veo_instructions.json with 4 clips for {project_folder.name}")
+
 def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
     """
     Process multiple video projects from input directory.
@@ -90,21 +116,29 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Discover all project folders (subdirectories with required JSON files)
-    # style_options.json is optional - will fall back to master copy if not present
+    # style_options.json and veo_instructions.json are optional - will use defaults if not present
     project_folders = []
     for item in input_path.iterdir():
         if item.is_dir():
-            # Check if folder has required configuration files
-            # Note: style_options.json is optional, will use master fallback if missing
-            required_files = ['veo_instructions.json', 'metadata_options.json']
-            if all((item / f).exists() for f in required_files):
+            # Check if folder has at least metadata_options.json
+            # veo_instructions.json will be created with defaults if missing
+            # style_options.json will fall back to master copy if not present
+            metadata_file = item / 'metadata_options.json'
+            veo_file = item / 'veo_instructions.json'
+            
+            if metadata_file.exists():
+                # Create default veo_instructions.json if it doesn't exist
+                if not veo_file.exists():
+                    create_default_veo_instructions(item)
+                
                 project_folders.append(item)
             else:
-                logging.warning(f"Skipping {item.name}: missing required JSON files (veo_instructions.json, metadata_options.json)")
+                logging.warning(f"Skipping {item.name}: missing required metadata_options.json")
     
     if not project_folders:
         logging.error(f"No valid project folders found in {input_dir}")
-        logging.info("Each project folder must contain: veo_instructions.json, metadata_options.json")
+        logging.info("Each project folder must contain: metadata_options.json")
+        logging.info("veo_instructions.json is optional (will create default with 4 clips if missing)")
         logging.info("style_options.json is optional (will use master copy from project root if not present)")
         sys.exit(1)
     
