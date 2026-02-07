@@ -289,7 +289,7 @@ class DanceShortsAutomator:
             # Using method='caption' to wrap text if needed, or default
             try:
                 txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, font=font, size=(safe_width, None), method='caption')
-                            .with_position(('center', 600))
+                            .with_position(('center', 800))
                             .with_start(start)
                             .with_duration(duration))
                 text_clips.append(txt_clip)
@@ -298,7 +298,7 @@ class DanceShortsAutomator:
                 # Fallback without font specification (uses default)
                 try:
                     txt_clip = (TextClip(text=text_with_margin, font_size=font_size, color=color, size=(safe_width, None), method='caption')
-                                .with_position(('center', 600))
+                                .with_position(('center', 800))
                                 .with_start(start)
                                 .with_duration(duration))
                     text_clips.append(txt_clip)

@@ -84,8 +84,8 @@ def create_default_veo_instructions(project_folder: Path):
         "audio_source": "",
         "scenes": [
             {"id": 1, "source": "clip1.mp4", "start": 1, "duration": 2},
-            {"id": 2, "source": "clip2.mp4", "start": 2, "duration": 3},
-            {"id": 3, "source": "clip3.mp4", "start": 2, "duration": 5},
+            {"id": 2, "source": "clip2.mp4", "start": 2, "duration": 4},
+            {"id": 3, "source": "clip3.mp4", "start": 2, "duration": 2},
             {"id": 4, "source": "clip4.mp4", "start": 2, "duration": 5}
         ]
     }
