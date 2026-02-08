@@ -156,6 +156,77 @@ class DanceShortsAutomator:
         
         return video_clip
 
+    def _validate_scene_clip(self, scene: Dict[str, Any], index: int) -> str:
+        """
+        Validates scene fields and source file existence.
+
+        Args:
+            scene: Scene dictionary
+            index: Scene index for error messages
+
+        Returns:
+            Resolved source path if valid, None if file missing
+            
+        Raises:
+            ValueError: If scene format is invalid
+        """
+        source = scene.get('source')
+
+        # Validate that required fields exist
+        if source is None:
+            # Check if this is a Veo generation format (has start_image/end_image/prompt)
+            if 'start_image' in scene or 'end_image' in scene or 'prompt' in scene:
+                raise ValueError(
+                    f"Scene {index+1} appears to be in Veo AI generation format (contains 'start_image'/'end_image'/'prompt'). "
+                    "This tool requires video stitching format with 'source', 'start', and 'duration' fields. "
+                    "Please convert your Veo generation instructions to actual video clips first."
+                )
+            else:
+                raise ValueError(
+                    f"Scene {index+1} is missing required 'source' field. "
+                    "Expected format: {{\"source\": \"clip.mp4\", \"start\": 0, \"duration\": 5}}"
+                )
+
+        # Resolve relative paths from working directory
+        source_path = os.path.join(self.working_directory, source) if not os.path.isabs(source) else source
+
+        if not os.path.exists(source_path):
+            logger.warning(f"Source file {source_path} not found. Skipping.")
+            return None
+            
+        return source_path
+
+    def _process_scene_clip(self, source_path: str, scene: Dict[str, Any], index: int) -> VideoFileClip:
+        """
+        Loads, trims, resizes, crops, and applies transitions to a clip.
+        """
+        start = scene.get('start', 0)
+        duration = scene.get('duration', 5)
+
+        clip = VideoFileClip(source_path).subclipped(start, start + duration)
+
+        # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
+        target_w, target_h = 720, 1280
+        target_ratio = target_w / target_h
+        current_ratio = clip.w / clip.h
+
+        if current_ratio > target_ratio:
+            # Source is wider than target (e.g. 16:9 vs 9:16)
+            # Resize by height to match target height, then crop width
+            clip = clip.resized(height=target_h)
+            clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
+        else:
+            # Source is taller or equal (e.g. 9:16 or thinner)
+            # Resize by width to match target width, then crop height
+            clip = clip.resized(width=target_w)
+            clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
+
+        # Apply CrossFadeIn to subsequent clips for transition effect
+        if index > 0:
+            clip = clip.with_effects([vfx.CrossFadeIn(0.5)])
+
+        return clip
+
     def _stitch_scenes(self) -> VideoFileClip:
         """
         Stitches scenes together with cross-dissolve transitions.
@@ -163,58 +234,12 @@ class DanceShortsAutomator:
         scenes_data = self.instructions.get('scenes', [])
         clips = []
 
-
         for i, scene in enumerate(scenes_data):
-            source = scene.get('source')
-            
-            # Validate that required fields exist
-            if source is None:
-                # Check if this is a Veo generation format (has start_image/end_image/prompt)
-                if 'start_image' in scene or 'end_image' in scene or 'prompt' in scene:
-                    raise ValueError(
-                        f"Scene {i+1} appears to be in Veo AI generation format (contains 'start_image'/'end_image'/'prompt'). "
-                        "This tool requires video stitching format with 'source', 'start', and 'duration' fields. "
-                        "Please convert your Veo generation instructions to actual video clips first."
-                    )
-                else:
-                    raise ValueError(
-                        f"Scene {i+1} is missing required 'source' field. "
-                        "Expected format: {{\"source\": \"clip.mp4\", \"start\": 0, \"duration\": 5}}"
-                    )
-            
-            start = scene.get('start', 0)
-            duration = scene.get('duration', 5)
-
-
-            # Resolve relative paths from working directory
-            source_path = os.path.join(self.working_directory, source) if not os.path.isabs(source) else source
-            
-            if not os.path.exists(source_path):
-                logger.warning(f"Source file {source_path} not found. Skipping.")
+            source_path = self._validate_scene_clip(scene, i)
+            if not source_path:
                 continue
 
-            clip = VideoFileClip(source_path).subclipped(start, start + duration)
-
-            # Ensure 9:16 aspect ratio (720x1280) via Crop-to-Fill
-            target_w, target_h = 720, 1280
-            target_ratio = target_w / target_h
-            current_ratio = clip.w / clip.h
-
-            if current_ratio > target_ratio:
-                # Source is wider than target (e.g. 16:9 vs 9:16)
-                # Resize by height to match target height, then crop width
-                clip = clip.resized(height=target_h)
-                clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
-            else:
-                # Source is taller or equal (e.g. 9:16 or thinner)
-                # Resize by width to match target width, then crop height
-                clip = clip.resized(width=target_w)
-                clip = clip.cropped(width=target_w, height=target_h, x_center=clip.w / 2, y_center=clip.h / 2)
-
-            # Apply CrossFadeIn to subsequent clips for transition effect
-            if i > 0:
-                clip = clip.with_effects([vfx.CrossFadeIn(0.5)])
-
+            clip = self._process_scene_clip(source_path, scene, i)
             clips.append(clip)
 
         if not clips:
