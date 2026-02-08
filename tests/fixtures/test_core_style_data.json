@@ -1,0 +1,12 @@
+{
+  "options": {
+    "1": {
+      "style": "Basic"
+    },
+    "2": {
+      "style": "Recommended",
+      "color": "Red"
+    }
+  },
+  "default": "2"
+}

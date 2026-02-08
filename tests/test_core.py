@@ -16,13 +16,8 @@ def mock_data_files(tmp_path):
         "option_2": {"title": "Test Option 2", "text_overlay": []},
         "recommended": 2
     }
-    style_data = {
-        "options": {
-            "1": {"style": "Basic"},
-            "2": {"style": "Recommended", "color": "Red"}
-        },
-        "default": "2"
-    }
+    with open(os.path.join(os.path.dirname(__file__), 'fixtures', 'test_core_style_data.json'), 'r') as f:
+        style_data = json.load(f)
 
     with open(instr_file, 'w') as f:
         json.dump(instr_data, f)
