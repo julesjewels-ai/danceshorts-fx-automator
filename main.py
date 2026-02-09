@@ -2,8 +2,11 @@ import argparse
 import sys
 import os
 import logging
+import time
 from pathlib import Path
 from src.core.app import DanceShortsAutomator
+from src.domain.models import BatchJobResult, ProcessingStatus
+from src.core.reporting import MarkdownBatchReporter
 
 def setup_logging():
     logging.basicConfig(
@@ -116,18 +119,13 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
     output_path.mkdir(parents=True, exist_ok=True)
     
     # Discover all project folders (subdirectories with required JSON files)
-    # style_options.json and veo_instructions.json are optional - will use defaults if not present
     project_folders = []
     for item in input_path.iterdir():
         if item.is_dir():
-            # Check if folder has at least metadata_options.json
-            # veo_instructions.json will be created with defaults if missing
-            # style_options.json will fall back to master copy if not present
             metadata_file = item / 'metadata_options.json'
             veo_file = item / 'veo_instructions.json'
             
             if metadata_file.exists():
-                # Create default veo_instructions.json if it doesn't exist
                 if not veo_file.exists():
                     create_default_veo_instructions(item)
                 
@@ -138,21 +136,23 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
     if not project_folders:
         logging.error(f"No valid project folders found in {input_dir}")
         logging.info("Each project folder must contain: metadata_options.json")
-        logging.info("veo_instructions.json is optional (will create default with 4 clips if missing)")
-        logging.info("style_options.json is optional (will use master copy from project root if not present)")
+        logging.info("veo_instructions.json is optional")
+        logging.info("style_options.json is optional")
         sys.exit(1)
     
     logging.info(f"\n{'='*60}")
     logging.info(f"Batch Processing Mode: {len(project_folders)} project(s) found")
     logging.info(f"{'='*60}\n")
     
-    results = {'succeeded': [], 'failed': []}
+    batch_results = []
     
     for idx, project_folder in enumerate(project_folders, 1):
         project_name = project_folder.name
         logging.info(f"\n[{idx}/{len(project_folders)}] Processing: {project_name}")
         logging.info("-" * 60)
         
+        start_time = time.time()
+
         try:
             # Determine style file path (use local or fallback to master)
             style_file_path = project_folder / 'style_options.json'
@@ -164,7 +164,13 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
                     logging.info(f"  Using master style_options.json (no local copy found)")
                 else:
                     logging.error(f"  No style_options.json found locally or in project root")
-                    results['failed'].append(project_name)
+                    duration = time.time() - start_time
+                    batch_results.append(BatchJobResult(
+                        project_name=project_name,
+                        status=ProcessingStatus.FAILED,
+                        processing_time=duration,
+                        error_message="Missing style_options.json"
+                    ))
                     continue
             else:
                 logging.info(f"  Using local style_options.json")
@@ -183,37 +189,60 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
             
             app.process_pipeline(dry_run=dry_run, output_path=str(output_file))
             
-            results['succeeded'].append(project_name)
+            duration = time.time() - start_time
+            batch_results.append(BatchJobResult(
+                project_name=project_name,
+                status=ProcessingStatus.SUCCESS,
+                processing_time=duration
+            ))
             logging.info(f"✓ Successfully processed: {project_name}")
             
         except Exception as e:
-            results['failed'].append(project_name)
+            duration = time.time() - start_time
+            batch_results.append(BatchJobResult(
+                project_name=project_name,
+                status=ProcessingStatus.FAILED,
+                processing_time=duration,
+                error_message=str(e)
+            ))
             logging.error(f"✗ Failed to process {project_name}: {e}")
             continue
     
-    # Print summary
+    # Generate Report
+    report_path = output_path / "batch_report.md"
+    try:
+        reporter = MarkdownBatchReporter(output_path=str(report_path))
+        reporter.generate(batch_results)
+        logging.info(f"Report generated: {report_path}")
+    except Exception as e:
+        logging.error(f"Failed to generate report: {e}")
+
+    # Print summary to console
+    succeeded = [r for r in batch_results if r.status == ProcessingStatus.SUCCESS]
+    failed = [r for r in batch_results if r.status == ProcessingStatus.FAILED]
+
     logging.info(f"\n\n{'='*60}")
     logging.info("BATCH PROCESSING SUMMARY")
     logging.info(f"{'='*60}")
     logging.info(f"Total projects: {len(project_folders)}")
-    logging.info(f"Succeeded: {len(results['succeeded'])}")
-    logging.info(f"Failed: {len(results['failed'])}")
+    logging.info(f"Succeeded: {len(succeeded)}")
+    logging.info(f"Failed: {len(failed)}")
     
-    if results['succeeded']:
+    if succeeded:
         logging.info(f"\n✓ Successful projects:")
-        for name in results['succeeded']:
-            logging.info(f"  - {name}")
+        for res in succeeded:
+            logging.info(f"  - {res.project_name} ({res.processing_time:.2f}s)")
     
-    if results['failed']:
+    if failed:
         logging.info(f"\n✗ Failed projects:")
-        for name in results['failed']:
-            logging.info(f"  - {name}")
+        for res in failed:
+            logging.info(f"  - {res.project_name}: {res.error_message}")
     
-    logging.info(f"\nOutput directory: {output_dir}")
+    logging.info(f"Output directory: {output_dir}")
     logging.info(f"{'='*60}\n")
     
     # Exit with error code if any projects failed
-    if results['failed']:
+    if failed:
         sys.exit(1)
 
 def main():

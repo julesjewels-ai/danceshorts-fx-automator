@@ -1,29 +1,8 @@
 {
     "options": {
-        "1": {
-            "style": "Minimal",
-            "font": "Arial-Unicode-MS",
-            "color": "white",
-            "font_size": 70
-        },
-        "2": {
-            "style": "Recommended",
-            "font": "Impact",
-            "color": "yellow",
-            "font_size": 70
-        },
-        "3": {
-            "style": "Cinematic",
-            "font": "Georgia",
-            "color": "white",
-            "font_size": 60
-        },
-        "4": {
-            "style": "Clásico",
-            "font": "Baskerville",
-            "color": "white",
-            "font_size": 62
-        }
+        "1": {"style": "Minimal", "font": "Arial", "color": "white", "font_size": 70},
+        "2": {"style": "Recommended", "font": "Impact", "color": "yellow", "font_size": 70},
+        "3": {"style": "Cinematic", "font": "Serif", "color": "white", "font_size": 60}
     },
-    "default": "3"
+    "default": "2"
 }
