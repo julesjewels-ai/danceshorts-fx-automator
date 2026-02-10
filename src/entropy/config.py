@@ -1,0 +1,9 @@
+class EntropyConfig:
+    MAX_TOKEN_CONTEXT = 2000
+    MAX_MOCK_DENSITY = 0.55
+    MIN_UNIQUE_COVERAGE_THRESHOLD = 5
+    EXECUTION_MODE = 'PR_SUGGESTION' # 'PR_SUGGESTION', 'REPORT_ONLY'
+    CRITICAL_PATHS_FILE = 'critical_paths.json'
+
+    # Thresholds for Rot Score
+    CHURN_THRESHOLD = 5
