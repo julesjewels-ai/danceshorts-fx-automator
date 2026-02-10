@@ -2,6 +2,7 @@ import argparse
 import sys
 import os
 import logging
+from typing import List, Optional, Dict
 from pathlib import Path
 from src.core.app import DanceShortsAutomator
 
@@ -96,27 +97,11 @@ def create_default_veo_instructions(project_folder: Path):
     
     logging.info(f"  Created default veo_instructions.json with 4 clips for {project_folder.name}")
 
-def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
+def _discover_project_folders(input_path: Path) -> List[Path]:
     """
-    Process multiple video projects from input directory.
-    
-    Args:
-        input_dir: Directory containing project subfolders
-        output_dir: Directory to write output videos
-        dry_run: If True, simulate processing without rendering
+    Scans the input directory for valid project folders.
+    Create default veo_instructions.json if missing but metadata exists.
     """
-    input_path = Path(input_dir)
-    output_path = Path(output_dir)
-    
-    if not input_path.exists():
-        logging.error(f"Input directory not found: {input_dir}")
-        sys.exit(1)
-    
-    # Create output directory if it doesn't exist
-    output_path.mkdir(parents=True, exist_ok=True)
-    
-    # Discover all project folders (subdirectories with required JSON files)
-    # style_options.json and veo_instructions.json are optional - will use defaults if not present
     project_folders = []
     for item in input_path.iterdir():
         if item.is_dir():
@@ -134,6 +119,103 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
                 project_folders.append(item)
             else:
                 logging.warning(f"Skipping {item.name}: missing required metadata_options.json")
+    return project_folders
+
+def _resolve_style_path(project_folder: Path, input_path: Path) -> Optional[Path]:
+    """
+    Determines the path to style_options.json, falling back to master copy if needed.
+    """
+    style_file_path = project_folder / 'style_options.json'
+    if not style_file_path.exists():
+        # Fallback to master copy in project root
+        master_style_path = input_path.parent / 'style_options.json'
+        if master_style_path.exists():
+            logging.info(f"  Using master style_options.json (no local copy found)")
+            return master_style_path
+        else:
+            logging.error(f"  No style_options.json found locally or in project root")
+            return None
+    else:
+        logging.info(f"  Using local style_options.json")
+        return style_file_path
+
+def _process_single_project(project_folder: Path, input_path: Path, output_path: Path, dry_run: bool) -> bool:
+    """
+    Processes a single project folder. Returns True if successful.
+    """
+    project_name = project_folder.name
+
+    try:
+        # Determine style file path (use local or fallback to master)
+        style_file_path = _resolve_style_path(project_folder, input_path)
+        if not style_file_path:
+            return False
+
+        app = DanceShortsAutomator(
+            instruction_file=str(project_folder / 'veo_instructions.json'),
+            options_file=str(project_folder / 'metadata_options.json'),
+            style_file=str(style_file_path),
+            working_directory=str(project_folder)
+        )
+
+        app.load_configurations()
+
+        # Set output path
+        output_file = output_path / f"{project_name}_final.mp4"
+
+        app.process_pipeline(dry_run=dry_run, output_path=str(output_file))
+
+        logging.info(f"✓ Successfully processed: {project_name}")
+        return True
+
+    except Exception as e:
+        logging.error(f"✗ Failed to process {project_name}: {e}")
+        return False
+
+def _print_batch_summary(results: Dict[str, List[str]], total_projects: int, output_dir: str) -> None:
+    """
+    Prints the final summary of the batch processing job.
+    """
+    logging.info(f"\n\n{'='*60}")
+    logging.info("BATCH PROCESSING SUMMARY")
+    logging.info(f"{'='*60}")
+    logging.info(f"Total projects: {total_projects}")
+    logging.info(f"Succeeded: {len(results['succeeded'])}")
+    logging.info(f"Failed: {len(results['failed'])}")
+
+    if results['succeeded']:
+        logging.info(f"\n✓ Successful projects:")
+        for name in results['succeeded']:
+            logging.info(f"  - {name}")
+
+    if results['failed']:
+        logging.info(f"\n✗ Failed projects:")
+        for name in results['failed']:
+            logging.info(f"  - {name}")
+
+    logging.info(f"\nOutput directory: {output_dir}")
+    logging.info(f"{'='*60}\n")
+
+def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
+    """
+    Process multiple video projects from input directory.
+
+    Args:
+        input_dir: Directory containing project subfolders
+        output_dir: Directory to write output videos
+        dry_run: If True, simulate processing without rendering
+    """
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+
+    if not input_path.exists():
+        logging.error(f"Input directory not found: {input_dir}")
+        sys.exit(1)
+
+    # Create output directory if it doesn't exist
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    project_folders = _discover_project_folders(input_path)
     
     if not project_folders:
         logging.error(f"No valid project folders found in {input_dir}")
@@ -153,64 +235,12 @@ def process_batch(input_dir: str, output_dir: str, dry_run: bool = False):
         logging.info(f"\n[{idx}/{len(project_folders)}] Processing: {project_name}")
         logging.info("-" * 60)
         
-        try:
-            # Determine style file path (use local or fallback to master)
-            style_file_path = project_folder / 'style_options.json'
-            if not style_file_path.exists():
-                # Fallback to master copy in project root
-                master_style_path = input_path.parent / 'style_options.json'
-                if master_style_path.exists():
-                    style_file_path = master_style_path
-                    logging.info(f"  Using master style_options.json (no local copy found)")
-                else:
-                    logging.error(f"  No style_options.json found locally or in project root")
-                    results['failed'].append(project_name)
-                    continue
-            else:
-                logging.info(f"  Using local style_options.json")
-            
-            app = DanceShortsAutomator(
-                instruction_file=str(project_folder / 'veo_instructions.json'),
-                options_file=str(project_folder / 'metadata_options.json'),
-                style_file=str(style_file_path),
-                working_directory=str(project_folder)
-            )
-            
-            app.load_configurations()
-            
-            # Set output path
-            output_file = output_path / f"{project_name}_final.mp4"
-            
-            app.process_pipeline(dry_run=dry_run, output_path=str(output_file))
-            
+        if _process_single_project(project_folder, input_path, output_path, dry_run):
             results['succeeded'].append(project_name)
-            logging.info(f"✓ Successfully processed: {project_name}")
-            
-        except Exception as e:
+        else:
             results['failed'].append(project_name)
-            logging.error(f"✗ Failed to process {project_name}: {e}")
-            continue
     
-    # Print summary
-    logging.info(f"\n\n{'='*60}")
-    logging.info("BATCH PROCESSING SUMMARY")
-    logging.info(f"{'='*60}")
-    logging.info(f"Total projects: {len(project_folders)}")
-    logging.info(f"Succeeded: {len(results['succeeded'])}")
-    logging.info(f"Failed: {len(results['failed'])}")
-    
-    if results['succeeded']:
-        logging.info(f"\n✓ Successful projects:")
-        for name in results['succeeded']:
-            logging.info(f"  - {name}")
-    
-    if results['failed']:
-        logging.info(f"\n✗ Failed projects:")
-        for name in results['failed']:
-            logging.info(f"  - {name}")
-    
-    logging.info(f"\nOutput directory: {output_dir}")
-    logging.info(f"{'='*60}\n")
+    _print_batch_summary(results, len(project_folders), output_dir)
     
     # Exit with error code if any projects failed
     if results['failed']:
