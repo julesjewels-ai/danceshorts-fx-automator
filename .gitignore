@@ -23,3 +23,8 @@ metadata_options.json
 *.DS_Store
 
 inputs/
+tests/quarantine/
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
