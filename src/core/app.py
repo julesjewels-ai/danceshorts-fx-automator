@@ -1,9 +1,12 @@
 import json
 import os
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from moviepy import VideoFileClip, TextClip, CompositeVideoClip, concatenate_videoclips
 import moviepy.video.fx as vfx
+
+from src.interfaces.notification import NotificationService
+from src.domain.models import NotificationLevel
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +18,14 @@ class DanceShortsAutomator:
     specifically tuned for YouTube Shorts (9:16 aspect ratio).
     """
 
-    def __init__(self, instruction_file: str, options_file: str, style_file: str, working_directory: str = None):
+    def __init__(
+        self,
+        instruction_file: str,
+        options_file: str,
+        style_file: str,
+        working_directory: str = None,
+        notification_service: Optional[NotificationService] = None
+    ):
         """
         Initialize the automator.
 
@@ -24,11 +34,13 @@ class DanceShortsAutomator:
             options_file (str): Path to metadata_options.json
             style_file (str): Path to style_options.json
             working_directory (str): Base directory for resolving relative paths (optional)
+            notification_service (NotificationService, optional): Service for sending notifications.
         """
         self.instruction_file = instruction_file
         self.options_file = options_file
         self.style_file = style_file
         self.working_directory = working_directory or os.getcwd()
+        self.notification_service = notification_service
         self.instructions: Dict[str, Any] = {}
         self.metadata_options: Dict[str, Any] = {}
         self.style_options: Dict[str, Any] = {}
@@ -345,8 +357,16 @@ class DanceShortsAutomator:
         logger.info(f"Using metadata option: {self.selected_metadata.get('title', 'Unknown')}")
         logger.info(f"Using style: {self.selected_style.get('style', 'Unknown')}")
         
+        if self.notification_service:
+            self.notification_service.notify(
+                f"Starting processing for {len(scenes)} scenes.",
+                NotificationLevel.INFO
+            )
+
         if dry_run:
             logger.info("[DRY-RUN] Video processing simulated. No file written.")
+            if self.notification_service:
+                self.notification_service.notify("Dry run completed.", NotificationLevel.SUCCESS)
             return
 
         try:
@@ -372,7 +392,18 @@ class DanceShortsAutomator:
             )
             logger.info(f"✓ Render complete: {output_filename}")
 
+            if self.notification_service:
+                self.notification_service.notify(
+                    f"Render complete: {output_filename}",
+                    NotificationLevel.SUCCESS
+                )
+
         except Exception as e:
             logger.error(f"Pipeline failed: {e}")
+            if self.notification_service:
+                self.notification_service.notify(
+                    f"Pipeline failed: {e}",
+                    NotificationLevel.ERROR
+                )
             raise
 
