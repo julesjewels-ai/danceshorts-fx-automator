@@ -23,3 +23,10 @@ metadata_options.json
 *.DS_Store
 
 inputs/
+
+# Entropy
+.coverage
+coverage/
+htmlcov/
+tests/quarantine/
+entropy_report.md
