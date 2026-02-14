@@ -5,6 +5,7 @@ import logging
 from typing import List, Optional, Dict
 from pathlib import Path
 from src.core.app import DanceShortsAutomator
+from src.infrastructure.exporters import TextFileMetadataExporter
 
 def setup_logging():
     logging.basicConfig(
@@ -165,6 +166,16 @@ def _process_single_project(project_folder: Path, input_path: Path, output_path:
 
         app.process_pipeline(dry_run=dry_run, output_path=str(output_file))
 
+        # Export metadata sidecar
+        try:
+            logging.info(f"Exporting metadata sidecar for {project_name}...")
+            exporter = TextFileMetadataExporter()
+            metadata_export_path = output_path / f"{project_name}_final_metadata.txt"
+            exporter.export(app.selected_metadata, str(metadata_export_path))
+            logging.info(f"✓ Metadata exported: {metadata_export_path.name}")
+        except Exception as e:
+            logging.error(f"Failed to export metadata: {e}")
+
         logging.info(f"✓ Successfully processed: {project_name}")
         return True
 
@@ -290,6 +301,16 @@ Examples:
         
         app.load_configurations()
         app.process_pipeline(dry_run=args.dry_run)
+
+        # Export metadata sidecar
+        try:
+            logging.info("Exporting metadata sidecar...")
+            exporter = TextFileMetadataExporter()
+            metadata_export_path = "final_dance_short_metadata.txt"
+            exporter.export(app.selected_metadata, metadata_export_path)
+            logging.info(f"✓ Metadata exported: {metadata_export_path}")
+        except Exception as e:
+            logging.error(f"Failed to export metadata: {e}")
         
     except Exception as e:
         logging.error(f"Application failed: {e}")
